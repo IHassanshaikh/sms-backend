@@ -11,10 +11,14 @@ const upload = multer({ dest: "uploads/" });
 
 
 router.post("/upload", upload.single("file"), async (req, res) => {
+    console.log("Upload request received");
+    console.log("req.file:", req.file);
+    console.log("req.body:", req.body);
     const contacts = [];
     let campaignId = null;
 
     if (!req.file) {
+        console.error("No file in request");
         return res.status(400).json({ success: false, message: "No file uploaded" });
     }
 
@@ -27,21 +31,35 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         fs.createReadStream(req.file.path)
             .pipe(parse({ columns: true, trim: true, skip_empty_lines: true, bom: true }))
             .on("data", (row) => {
-                if (row.name && row.phone) {
+                console.log("Row keys:", Object.keys(row));
+                console.log("Row data:", row);
+                // Normalize keys to lowercase to handle Case Sensitivity
+                const normalizedRow = {};
+                Object.keys(row).forEach(key => {
+                    normalizedRow[key.trim().toLowerCase()] = row[key];
+                });
+
+                // Allow aliases for phone number
+                const phone = normalizedRow.phone || normalizedRow.number || normalizedRow.mobile || normalizedRow.contact;
+
+                if (normalizedRow.name && phone) {
                     const contact = {
-                        name: row.name,
-                        phone: row.phone,
+                        name: normalizedRow.name,
+                        phone: phone,
                     };
                     if (campaignId) contact.campaignId = campaignId;
                     contacts.push(contact);
                 }
             })
             .on("end", async () => {
+                console.log(`Parsed ${contacts.length} contacts`);
                 try {
                     await Contact.insertMany(contacts, { ordered: false });
                     fs.unlinkSync(req.file.path);
+                    console.log("Insertion successful");
                     res.json({ success: true, total: contacts.length, campaignId });
                 } catch (error) {
+                    console.error("Insertion error:", error.message);
                     // Start of Selection
                     if (error.code === 11000 || error.writeErrors) {
                         // Some duplicates found
@@ -59,6 +77,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
                 }
             })
             .on("error", (error) => {
+                console.error("Parse error:", error);
                 res.status(500).json({ success: false, message: error.message });
             });
     } catch (error) {

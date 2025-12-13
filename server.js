@@ -5,6 +5,7 @@ import connectDB from "./config/db.js";
 import contactRoutes from "./routes/contacts.js";
 import smsRoutes from "./routes/sms.js";
 import campaignRoutes from "./routes/campaigns.js";
+import { startWorker } from "./utils/scheduler.js";
 
 dotenv.config();
 
@@ -13,6 +14,9 @@ app.use(cors());
 app.use(express.json());
 
 connectDB();
+
+// Start Background Worker
+startWorker();
 
 app.use("/api/contacts", contactRoutes);
 app.use("/api/sms", smsRoutes);
